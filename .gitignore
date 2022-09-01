@@ -1,0 +1,6 @@
+# 此为不想 git 跟踪的文件
+Include/
+Lib/
+Scripts/
+.idea/
+pyvenv.cfg
