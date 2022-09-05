@@ -7,13 +7,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from Crawller.CrawllerAbs import CrawllerBase
 from Crawller.Parse import BSParser
-from Crawller.utils.TimeConsumeStatisticer import asyncTimeConsume
+from utils.TimeConsumeStatisticer import asyncTimeConsume
 import asyncio
-import aiohttp
-import httpx
 import traceback
 import requests_html
-from Crawller.CrawllerAbs import samphore
+
 # 不同类别爬虫的基类
 # 只有抽象基类，想要统一只是用抽象基类的 crawl 方法，那么就需要定义基类，让不同类别的爬虫类继承此基类，否则，抽象基类就要
 # 定义不同的抽象方法，不同类别的爬虫类就都要实现所有抽象方法，显然不合适，而新基类继承抽象类，将统一的 crawl 交给不同爬虫子类进行不同实现
@@ -142,7 +140,6 @@ class IndexCrawller(CateCrawller):
         except Exception as e:
             print("some error occured in requestDetailByRequestsHtml")
             print(traceback.print_exc())
-
 
     # selenium 的异步请求每页的详情
     @asyncTimeConsume
