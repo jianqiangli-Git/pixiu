@@ -11,6 +11,8 @@ THS_BASE = r'https://www.10jqka.com.cn/'
 ZQSB_BASE = r'http://www.stcn.com/'
 
 XQ_HQ = XQ_BASE + 'hq/'
+XQ_INDEXINFO_AJAX = 'https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001,SZ399001,SZ399006,SH000688,HKHSI,HKHSCEI,HKHSCCI,.DJI,.IXIC,.INX'
+XQ_INDEX_AJAX = r'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=SH000001,SZ399001,SZ399006,SH000688&_= timestamp'
 
 #行业 url 类
 class XQIndustryUrl():
@@ -34,6 +36,15 @@ class XQIndexUrl():
 class XQStockUrl():
     def __init__(self,url):
         self._base_url = url
+
+    @property
+    def url(self):
+        return self._base_url
+
+#雪球 行业下的股票url类
+class XQNewIndexUrl():
+    def __init__(self):
+        self._base_url = XQ_INDEXINFO_AJAX
 
     @property
     def url(self):

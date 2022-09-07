@@ -8,37 +8,60 @@ from selenium.webdriver.support import expected_conditions as EC
 from Crawller.CrawllerAbs import CrawllerBase
 from Crawller.Parse import BSParser
 from utils.TimeConsumeStatisticer import asyncTimeConsume
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.wait import WebDriverWait
+from DataSaver.JsonSaver.JsonSaveApi import save_to_json
+from Crawller.ConstInfo import headers
 import asyncio
+import aiohttp
 import traceback
 import requests_html
+from asyncio import Semaphore
+import json
+
+webdriver_location = r'C:\Users\lijianqiang\Desktop\chromedriver'
+wait_time = 6
+concurrency = 4
+samphore = Semaphore(concurrency)
 
 # 不同类别爬虫的基类
 # 只有抽象基类，想要统一只是用抽象基类的 crawl 方法，那么就需要定义基类，让不同类别的爬虫类继承此基类，否则，抽象基类就要
 # 定义不同的抽象方法，不同类别的爬虫类就都要实现所有抽象方法，显然不合适，而新基类继承抽象类，将统一的 crawl 交给不同爬虫子类进行不同实现
 # 新基类可以实例化，通过新基类调用统一的 crawl 方法比较合适。
 class CateCrawller(CrawllerBase):
-    # requests_html 只创建一个 session 而不是每次请求都创建一个 session
-    _session = requests_html.AsyncHTMLSession()
+    # requests_html 只创建一个全局 session 而不是每次请求都创建一个 session
+    _requests_html_session = requests_html.AsyncHTMLSession()
 
     def __init__(self,cateUrl):
         '''
         :param cateUrl: 传入CrawerllerApi模块的 url类别对象，例如XQIndustry，XQIndex
         '''
         super(CateCrawller, self).__init__(cateUrl)
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless')
+        self._driver = webdriver.Chrome(service=Service(executable_path=webdriver_location), options=options)
+        # print(self._driver.get_window_rect())
+        # self._driver.set_window_position(x=600,y=9)
+        self._wait = WebDriverWait(self._driver, timeout=wait_time)
 
     # 使用 requests_html 请求
     @staticmethod
     @asyncTimeConsume
-    async def scrapyUrlByRequestsHtml(url):
+    async def scrapyUrlByRequestsHtml(url,**kwargs):
         '''
         :param url: 请求 url
         :return: <class 'requests_html.HTML'>
         '''
         try:
             # async with samphore:
-            content = await CateCrawller._session.get(url)
+            content = await CateCrawller._requests_html_session.get(url)
             # render 用来渲染 js,sleep 指定渲染时间，这个时间不好设置
             await content.html.arender(retries=3,sleep=0.1)
+            if 'callback' in kwargs:
+                func = kwargs['callback']
+                args = kwargs['args']
+                func(args)
             return content.html
         except Exception as e:
             print("some error occured in scrapyUrlByRequestsHtml")
@@ -50,17 +73,23 @@ class CateCrawller(CrawllerBase):
     @asyncTimeConsume
     async def scrapyUrlBySelenium(self,url):
         try:
-            t = time.time()
             self._driver.get(url)
-            print("selenium driver get time ",time.time()-t)
-            t1 = time.time()
             # 显式等待，等到类似上证指数的元素出现即返回，否则超时抛出异常，超时时间由 wait_time 控制
             self._wait.until(EC.visibility_of_any_elements_located((By.CSS_SELECTOR,'.StockSlider_type_pfC')))
-            print("selenium wait time ",time.time()-t1)
             return self._driver.page_source
         except Exception as e:
             print("some error occured in scrapyUrlBySelenium")
             print(e)
+
+    # 使用 aiohttp 请求
+    @staticmethod
+    async def crapyUrlByAiohttp(url):
+        # 此处频繁创建 session 请求主页又关闭，比较浪费资源，后续可优化为创建一个 session
+        async with aiohttp.ClientSession(headers=headers) as session:
+            await session.get('https://xueqiu.com/')  # 主要是用 session 管理 cookie 信息
+            async with session.get(url) as resp:
+                content = await resp.text()
+                return content
 
 #行业分类爬取类
 class NavCrawller(CateCrawller):
@@ -124,6 +153,21 @@ class NavCrawller(CateCrawller):
 class IndexCrawller(CateCrawller):
     def __init__(self,cateUrl):
         super(IndexCrawller, self).__init__(cateUrl)
+
+    async def requestDetailByAiohttp(self):
+        print("requestDetailByAiohttp running(use async)")
+        content = await self.crapyUrlByAiohttp(self._url)
+        content = json.loads(content)  # 将 str 转换为 dict
+        items = content['data']['items']
+        symbols = {}
+        for item in items:
+            symbol = item['quote']['symbol']
+            code = item['quote']['code']
+            exchange = item['quote']['exchange']
+            name = item['quote']['name']
+            symbols[symbol] = {'code': code, "exchange": exchange, 'name': name}
+        # 将指数和代码的字典关系存为 json 文件
+        save_to_json(symbols,"indexSymbolDict.json",'w')
 
     # html-requests 的异步请求
     @asyncTimeConsume
@@ -200,20 +244,14 @@ class IndexCrawller(CateCrawller):
         else:
             try:
                 print("IndexCrawller._crawl running(use sync)")
-                s = time.time()
                 self._driver.get(self._url)
-                print("IndexCrawller driver get use time ",time.time()-s)
                 print(self._url)
                 # 指定等待时间等待渲染（通常这个时间不好设置）
                 # time.sleep(0.2)
                 # 显式等待
-                s1 = time.time()
                 self._wait.until(lambda d: d.find_elements(By.CLASS_NAME, "StockSlider_type_pfC"))
-                print("IndexCrawller._crawl wait time ",time.time()-s1)
-                s2 = time.time()
                 bs = BSParser(self._driver.page_source)
                 indexes = bs._parse.find_all(attrs={'class':'StockSlider_home__stock-index__item_1V7'})
-                print("IndexCrawller._crawl parse time ", time.time() - s2)
                 for index in indexes: #每分钟更新一次数据
                     index_info = index.text.split('\n') #eg:['上证指数', '3236.22', '-10.03(-0.31%)', '0']
                     print(index_info)

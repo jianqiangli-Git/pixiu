@@ -2,36 +2,48 @@
 爬虫运行主进程
 '''
 import asyncio
-from Crawller.CrawerllerApi import XQIndexUrl,XQIndustryUrl,XQStockUrl
+from Crawller.CrawllerApi import XQIndexUrl,XQIndustryUrl,XQStockUrl,XQNewIndexUrl
 from Crawller.CrawllerAbs import CrawllerBase
 from Crawller.CrawllerImp import CateCrawller,NavCrawller,IndexCrawller,StockInfoCrawller
 import time
 import requests_html
 
-index = XQIndexUrl()
+# index = XQIndexUrl()
+# c = IndexCrawller(index)
+#
+# s2 = time.time()
+# c.crawl(useAsyncBySelenium=True)
+# print(f"selenium spend {time.time() - s2}")
+# print('===========================================')
+#
+# s1 = time.time()
+# c.crawl()
+# print(f"c spend {time.time() - s1}")
+# print('===========================================')
+#
+# s3 = time.time()
+# for i in range(1):
+#     c.crawl(useAsyncByRequestsHtml=True)
+# print(f"requestsHtml spend {time.time() - s3}")
+#
+index = XQNewIndexUrl()
 c = IndexCrawller(index)
 
-s2 = time.time()
-c.crawl(useAsyncBySelenium=True)
-print(f"selenium spend {time.time() - s2}")
-print('===========================================')
+async def test():
+    index_tasks = [c.requestDetailByAiohttp() for _ in range(1)]
+    await asyncio.gather(*index_tasks)
 
-s1 = time.time()
-c.crawl()
-print(f"c spend {time.time() - s1}")
-print('===========================================')
+# async def main():
+#     # global session
+#     # session = requests_html.AsyncHTMLSession()
+#     tasks = [c.requestDetail() for _ in range(1)]
+#     await asyncio.gather(*tasks)
 
-s3 = time.time()
-for i in range(1):
-    c.crawl(useAsyncByRequestsHtml=True)
-print(f"requestsHtml spend {time.time() - s3}")
-
-
-async def main():
-    # global session
-    # session = requests_html.AsyncHTMLSession()
-    tasks = [c.requestDetail() for _ in range(1)]
-    await asyncio.gather(*tasks)
+if __name__ == '__main__':
+    t = time.time()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(test())
+    print("use time ",time.time()-t)
 
 # if __name__ == '__main__':
 #     s2 = time.time()
