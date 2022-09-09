@@ -6,8 +6,8 @@ from bs4 import BeautifulSoup
 # BeautifulSoup 解析器
 class BSParser(object):
     # beautifulsoup 官方推荐使用 lxml 解析器，比默认的html.parser容错率高且效率更高
-    def __init__(self,html,parser='lxml'):
-        self._parse = BeautifulSoup(html,parser)
+    def __init__(self, html, parser='lxml'):
+        self._soup = BeautifulSoup(html, parser)
 
 # if __name__ == '__main__':
 #     html_doc = """

@@ -4,3 +4,4 @@ Lib/
 Scripts/
 .idea/
 pyvenv.cfg
+/Crawller/result/

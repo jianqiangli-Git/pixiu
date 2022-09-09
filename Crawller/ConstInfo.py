@@ -16,5 +16,6 @@ symbol = {
 
 headers = {  # httpx、aiohttp 的 client 不设置 user-agent 会发生 403 Forbidden，aiohttp 不设置 cookie 会发生 400 错误
     'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36",
-    'content-type': 'application/json, text/plain, */*',
+    'Origin': "https://xueqiu.com"
+    # 'content-type': 'application/json, text/plain, */*',
 }

@@ -11,8 +11,10 @@ THS_BASE = r'https://www.10jqka.com.cn/'
 ZQSB_BASE = r'http://www.stcn.com/'
 
 XQ_HQ = XQ_BASE + 'hq/'
+XQ_INDEX_MINUTE_AJAX = 'https://stock.xueqiu.com/v5/stock/chart/minute.json?symbol=SH000001&period=1d'
 XQ_INDEXINFO_AJAX = 'https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol=SH000001,SZ399001,SZ399006,SH000688,HKHSI,HKHSCEI,HKHSCCI,.DJI,.IXIC,.INX'
-XQ_INDEX_AJAX = r'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=SH000001,SZ399001,SZ399006,SH000688&_= timestamp'
+# quotec.json?symbol=HKHSI,HKHSCEI,HKHSCCI&_=1662602645982
+XQ_INDEX_SECOND_AJAX = r'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=SH000001,SZ399001,SZ399006,SH000688&_= timestamp'
 
 #行业 url 类
 class XQIndustryUrl():

@@ -25,12 +25,16 @@ import requests_html
 # for i in range(1):
 #     c.crawl(useAsyncByRequestsHtml=True)
 # print(f"requestsHtml spend {time.time() - s3}")
-#
+# print("===========================================")
 index = XQNewIndexUrl()
 c = IndexCrawller(index)
+# s4 = time.time()
+# for i in range(1):
+#     c.crawl(useAsyncByAiohttp=True)
+# print(f"requestsHtml spend {time.time() - s4}")
 
 async def test():
-    index_tasks = [c.requestDetailByAiohttp() for _ in range(1)]
+    index_tasks = [c.requestDetailByAiohttp() for _ in range(10)]
     await asyncio.gather(*index_tasks)
 
 # async def main():
@@ -39,22 +43,20 @@ async def test():
 #     tasks = [c.requestDetail() for _ in range(1)]
 #     await asyncio.gather(*tasks)
 
-if __name__ == '__main__':
-    t = time.time()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(test())
-    print("use time ",time.time()-t)
-
 # if __name__ == '__main__':
 #     s2 = time.time()
 #     loop = asyncio.get_event_loop()
-#     loop.run_until_complete(main())
+#     loop.run_until_complete(test())
 # #     # asyncio.run(main())
 # #     # asyncio.run(c.requestDetail())
 #     print(f"detail spend {time.time() - s2}")
 
-# industry = XQIndustryUrl()
-# n = NavCrawller(industry)
+industry = XQIndustryUrl()
+n = NavCrawller(industry)
+
+if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(n.requestDetailByAioHttp())
 # industry = n.crawl()
 # for first in industry:
 #     if first in ["最近访问","香港股市","美国股市","债券及回购","基金","私募"]:

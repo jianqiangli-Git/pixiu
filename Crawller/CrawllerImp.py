@@ -6,7 +6,7 @@ from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from Crawller.CrawllerAbs import CrawllerBase
-from Crawller.Parse import BSParser
+from Crawller.Parser import BSParser
 from utils.TimeConsumeStatisticer import asyncTimeConsume
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -22,7 +22,7 @@ import json
 
 webdriver_location = r'C:\Users\lijianqiang\Desktop\chromedriver'
 wait_time = 6
-concurrency = 4
+concurrency = 10
 samphore = Semaphore(concurrency)
 
 # 不同类别爬虫的基类
@@ -83,18 +83,86 @@ class CateCrawller(CrawllerBase):
 
     # 使用 aiohttp 请求
     @staticmethod
-    async def crapyUrlByAiohttp(url):
-        # 此处频繁创建 session 请求主页又关闭，比较浪费资源，后续可优化为创建一个 session
-        async with aiohttp.ClientSession(headers=headers) as session:
-            await session.get('https://xueqiu.com/')  # 主要是用 session 管理 cookie 信息
-            async with session.get(url) as resp:
-                content = await resp.text()
-                return content
+    async def crapyUrlByAiohttp(url,cookies=True):
+        async with samphore:
+            # 此处频繁创建 session 请求主页又关闭，比较浪费资源，后续可优化为创建一个 session
+            async with aiohttp.ClientSession(headers=headers) as session:
+                if cookies:
+                    await session.get('https://xueqiu.com/')  # 主要是用 session 管理 cookie 信息
+                async with session.get(url) as resp:
+                    content = await resp.text()
+                    return content
+            # 以下代码先请求 https://xueqiu.com/ 再请求 https://xueqiu.com/hq 没反应，但是请求 XQ_INDEXINFO_AJAX 就没问题
+            # 现象就像是死循环，也没报异常，不明白怎么回事，遂改为以上检查是否需要 cookies 先跑通
+            # async with aiohttp.ClientSession(headers=headers) as s:
+            #     await s.get("https://xueqiu.com/")
+            #     resp = await s.get(url)
+            #     print("pppp")
+            #     text = await resp.text()
+            #     # print(text)
 
 #行业分类爬取类
 class NavCrawller(CateCrawller):
-    def __init__(self,cateUrl):
+    def __init__(self, cateUrl):
         super(NavCrawller, self).__init__(cateUrl)
+
+    def _parse(self, content):
+        nav = {}
+        try:
+            bs = BSParser(content)
+            containers = bs._soup.find_all(attrs={'class': 'nav-container'})
+            for container in containers:
+                first_nav = container.find(attrs={'class': 'first-nav'})
+                second_navs = container.find(attrs={'class': 'second-nav'}).contents
+                print("first_nav:", first_nav)
+                first_nav_text = first_nav.select("span[class='name']")[0].text
+                print(first_nav_text)
+                print("first_nav_text:", first_nav.text)
+                first_nav_dict = {}
+                for second_nav in second_navs:
+                    second_nav_dict = {}
+                    second_nav_text = second_nav.find(text=True).get_text()  # 有文本的时候获取文本，而不继续向下获取子孙文本
+                    child_webElements_of_li = second_nav.contents  # 列表形式
+                    child_tags_of_li = [tag.name for tag in child_webElements_of_li]
+                    second_nav_href = self._url + second_nav.a.attrs['href'] if 'a' in child_tags_of_li else 'No-href'
+                    third_nav = second_nav.div.children if 'div' in child_tags_of_li else "NO-third-nav"
+                    second_nav_dict['href'] = second_nav_href if second_nav_href != "No-href" else "No-href"
+                    if third_nav != "NO-third-nav":
+                        third_nav_dict = {}
+                        count_of_li = 0  # 看一下 third 下的li有多少个，从而统计有多少个三级行业
+                        for ul in third_nav:
+                            li = ul.find_all('a')
+                            count_of_li = count_of_li + len(li)
+                            print(li)
+                            for a in li:
+                                li_text = a['title']
+                                li_href = self._url + a.get('href')
+                                if li_text in third_nav_dict:  # 发现恒生行业有的有2个相同的行业
+                                    third_nav_dict[li_text + '2'] = {'href': li_href}
+                                else:
+                                    third_nav_dict[li_text] = {'href': li_href}
+                        second_nav_dict["third-nav"] = third_nav_dict
+                    else:
+                        second_nav_dict['third-nav'] = "NO-third-nav"
+                    first_nav_dict[second_nav_text] = second_nav_dict
+                print()
+                nav[first_nav_text] = first_nav_dict
+            print(nav)  # 获取一级标签、二级标签、三级标签及 href 的字典
+            return nav
+        except Exception as e:
+            print("some error occured in NavCrawller._parse")
+            print(e)
+
+    async def requestDetailByAioHttp(self,cookies=True):
+        print('requestDetailByAioHttp running')
+        try:
+            print(self._url)
+            content = await self.crapyUrlByAiohttp(self._url,cookies=False)
+            nav = self._parse(content)
+            return nav
+        except Exception as e:
+            print("some error occured in NavCrawller.requestDetailByAioHttp")
+            print(traceback.print_exc())
 
     def _crawl(self,*args,**kwargs):
         nav = {}
@@ -141,8 +209,6 @@ class NavCrawller(CateCrawller):
                     else:
                         second_nav_dict['third-nav'] = "NO-third-nav"
                     first_nav_dict[second_nav_text] = second_nav_dict
-                # print("first-nav-dict",first_nav_dict)
-                # print()
                 nav[first_nav.text] = first_nav_dict
             print(nav) #获取一级标签、二级标签、三级标签及 href 的字典
             return nav
@@ -156,18 +222,27 @@ class IndexCrawller(CateCrawller):
 
     async def requestDetailByAiohttp(self):
         print("requestDetailByAiohttp running(use async)")
-        content = await self.crapyUrlByAiohttp(self._url)
-        content = json.loads(content)  # 将 str 转换为 dict
-        items = content['data']['items']
-        symbols = {}
-        for item in items:
-            symbol = item['quote']['symbol']
-            code = item['quote']['code']
-            exchange = item['quote']['exchange']
-            name = item['quote']['name']
-            symbols[symbol] = {'code': code, "exchange": exchange, 'name': name}
-        # 将指数和代码的字典关系存为 json 文件
-        save_to_json(symbols,"indexSymbolDict.json",'w')
+        try:
+            content = await self.crapyUrlByAiohttp(self._url)
+            content = json.loads(content)  # 将 str 转换为 dict
+            items = content['data']['items']
+            symbols = {}
+            status_dict = {}
+            for item in items:
+                status_id = item['market']['status_id']
+                status = item['market']['status']
+                region = item['market']['region']
+                symbol = item['quote']['symbol']
+                code = item['quote']['code']
+                exchange = item['quote']['exchange']
+                name = item['quote']['name']
+                symbols[symbol] = {'code': code, "exchange": exchange, 'name': name,'status_id':status_id,'status':status}
+                status_dict[region] = {str(status_id):status}
+            save_to_json(symbols, "indexSymbolDict.json", 'w')   # 将股市指数和代码的字典关系存为 json 文件
+            save_to_json(status_dict, "statusDict.json", 'w')    # 将股市交易状态和代码的字典关系存为 json 文件
+        except Exception as e:
+            print("some error occured in IndexCrawller.requestDetailByAiohttp")
+            print(traceback.print_exc())
 
     # html-requests 的异步请求
     @asyncTimeConsume
@@ -182,7 +257,7 @@ class IndexCrawller(CateCrawller):
                 print(index_info)
                 print()
         except Exception as e:
-            print("some error occured in requestDetailByRequestsHtml")
+            print("some error occured in IndexCrawller.requestDetailByRequestsHtml")
             print(traceback.print_exc())
 
     # selenium 的异步请求每页的详情
@@ -192,13 +267,13 @@ class IndexCrawller(CateCrawller):
             print("requestDetailBySelenium running(use async)")
             page = await self.scrapyUrlBySelenium(self._url)
             bs = BSParser(page)
-            indexes = bs._parse.find_all(attrs={'class': 'StockSlider_home__stock-index__item_1V7'})
+            indexes = bs._soup.find_all(attrs={'class': 'StockSlider_home__stock-index__item_1V7'})
             for index in indexes:  # 每分钟更新一次数据
                 index_info = index.text
                 print(index_info)
                 print()
         except Exception as e:
-            print("some error occured in requestDetailBySelenium")
+            print("some error occured in IndexCrawller.requestDetailBySelenium")
             print(traceback.print_exc())
 
         # headers = {  # httpx 的 client 不设置 user-agent 会发生 403 Forbidden
@@ -212,10 +287,10 @@ class IndexCrawller(CateCrawller):
         #     print("resp:")
         #     bs = BSParser(r.text)
         #     time.sleep(2)
-        #     print(bs._parse.prettify())
-        #     bs._parse.renderContents()
+        #     print(bs._soup.prettify())
+        #     bs._soup.renderContents()
         #
-        #     indexes = bs._parse.find_all(attrs={"name":"a","class":"StockSlider_home__stock-index__item_1V7"})
+        #     indexes = bs._soup.find_all(attrs={"name":"a","class":"StockSlider_home__stock-index__item_1V7"})
         #     print("index:",indexes)
         #     for index in indexes:  # 每分钟更新一次数据
         #         # index_info = index.get_text()  # eg:['上证指数', '3236.22', '-10.03(-0.31%)', '0']
@@ -241,6 +316,9 @@ class IndexCrawller(CateCrawller):
         elif 'useAsyncByRequestsHtml' in kwargs and kwargs['useAsyncByRequestsHtml']:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(self.requestDetailByRequestsHtml())
+        elif 'useAsyncByAiohttp' in kwargs and kwargs['useAsyncByAiohttp']:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(self.requestDetailByAiohttp())
         else:
             try:
                 print("IndexCrawller._crawl running(use sync)")
@@ -251,7 +329,7 @@ class IndexCrawller(CateCrawller):
                 # 显式等待
                 self._wait.until(lambda d: d.find_elements(By.CLASS_NAME, "StockSlider_type_pfC"))
                 bs = BSParser(self._driver.page_source)
-                indexes = bs._parse.find_all(attrs={'class':'StockSlider_home__stock-index__item_1V7'})
+                indexes = bs._soup.find_all(attrs={'class':'StockSlider_home__stock-index__item_1V7'})
                 for index in indexes: #每分钟更新一次数据
                     index_info = index.text.split('\n') #eg:['上证指数', '3236.22', '-10.03(-0.31%)', '0']
                     print(index_info)
