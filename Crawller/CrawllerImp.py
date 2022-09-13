@@ -7,12 +7,15 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from Crawller.CrawllerAbs import CrawllerBase
 from Crawller.Parser import BSParser
-from utils.TimeConsumeStatisticer import asyncTimeConsume
+from Utils.TimeConsumeStatisticer import asyncTimeConsume
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.wait import WebDriverWait
 from DataSaver.JsonSaver.JsonSaveApi import save_to_json
+from Crawller.ConstInfo import VOL_NAME,second_nav_kind
+from Utils.NavhrefToAjaxhref import secondNavhrefToAjaxhref, thirdNavhrefToAjaxhref
 from Crawller.ConstInfo import headers
+from math import ceil
 import asyncio
 import aiohttp
 import traceback
@@ -83,7 +86,7 @@ class CateCrawller(CrawllerBase):
 
     # 使用 aiohttp 请求
     @staticmethod
-    async def crapyUrlByAiohttp(url,cookies=True):
+    async def scrapyUrlByAiohttp(url,cookies=True):
         async with samphore:
             # 此处频繁创建 session 请求主页又关闭，比较浪费资源，后续可优化为创建一个 session
             async with aiohttp.ClientSession(headers=headers) as session:
@@ -93,11 +96,10 @@ class CateCrawller(CrawllerBase):
                     content = await resp.text()
                     return content
             # 以下代码先请求 https://xueqiu.com/ 再请求 https://xueqiu.com/hq 没反应，但是请求 XQ_INDEXINFO_AJAX 就没问题
-            # 现象就像是死循环，也没报异常，不明白怎么回事，遂改为以上检查是否需要 cookies 先跑通
+            # 现象就像是死循环，也没报异常，不明白怎么回事（可能是 access-allow-origin限制origin的原因），遂改为以上检查是否需要 cookies 先跑通
             # async with aiohttp.ClientSession(headers=headers) as s:
             #     await s.get("https://xueqiu.com/")
             #     resp = await s.get(url)
-            #     print("pppp")
             #     text = await resp.text()
             #     # print(text)
 
@@ -114,10 +116,7 @@ class NavCrawller(CateCrawller):
             for container in containers:
                 first_nav = container.find(attrs={'class': 'first-nav'})
                 second_navs = container.find(attrs={'class': 'second-nav'}).contents
-                print("first_nav:", first_nav)
                 first_nav_text = first_nav.select("span[class='name']")[0].text
-                print(first_nav_text)
-                print("first_nav_text:", first_nav.text)
                 first_nav_dict = {}
                 for second_nav in second_navs:
                     second_nav_dict = {}
@@ -133,7 +132,6 @@ class NavCrawller(CateCrawller):
                         for ul in third_nav:
                             li = ul.find_all('a')
                             count_of_li = count_of_li + len(li)
-                            print(li)
                             for a in li:
                                 li_text = a['title']
                                 li_href = self._url + a.get('href')
@@ -145,20 +143,20 @@ class NavCrawller(CateCrawller):
                     else:
                         second_nav_dict['third-nav'] = "NO-third-nav"
                     first_nav_dict[second_nav_text] = second_nav_dict
-                print()
                 nav[first_nav_text] = first_nav_dict
             print(nav)  # 获取一级标签、二级标签、三级标签及 href 的字典
+            save_to_json(nav, 'navInfoDict.json', 'w')
             return nav
         except Exception as e:
             print("some error occured in NavCrawller._parse")
             print(e)
 
-    async def requestDetailByAioHttp(self,cookies=True):
+    async def requestDetailByAioHttp(self):
         print('requestDetailByAioHttp running')
         try:
             print(self._url)
-            content = await self.crapyUrlByAiohttp(self._url,cookies=False)
-            nav = self._parse(content)
+            content = await self.scrapyUrlByAiohttp(self._url,cookies=False)
+            nav = self._parse(content) #后续可以新开一个线程来处理解析，加快速度
             return nav
         except Exception as e:
             print("some error occured in NavCrawller.requestDetailByAioHttp")
@@ -177,8 +175,6 @@ class NavCrawller(CateCrawller):
                 self._driver.execute_script("arguments[0].setAttribute(arguments[1],arguments[2])", container, 'class', 'nav-container unfold')
                 first_nav = container.find_element(By.CSS_SELECTOR,f".first-nav.nav{i}")
                 second_navs = container.find_elements(By.CSS_SELECTOR,".second-nav>li")
-                print(first_nav.text)
-                print('============')
                 first_nav_dict = {}
                 for second_nav in second_navs:
                     second_nav_dict = {}
@@ -188,7 +184,6 @@ class NavCrawller(CateCrawller):
                     second_nav_href = second_nav.find_element(By.TAG_NAME,"a").get_attribute('href') if 'a' in child_tags_of_li else 'No-href'
                     third_nav = second_nav.find_elements(By.CSS_SELECTOR,'.third-nav>ul') if 'div' in child_tags_of_li else "NO-third-nav" #third下的所有ul
                     second_nav_dict['href'] = second_nav_href if second_nav_href!= "No-href" else "No-href"
-                    # print(second_nav_text," ",child_tags_of_li,second_nav_href,third_nav)
                     if (third_nav != "NO-third-nav"):
                         third_nav_dict = {}
                         count_of_li = 0 #看一下 third 下的li有多少个，从而统计有多少个三级行业
@@ -198,13 +193,10 @@ class NavCrawller(CateCrawller):
                             for a in li:
                                 li_text = a.get_attribute('title')
                                 li_href = a.get_attribute('href')
-                                # print(li_text, " ", li_href)
                                 if li_text in third_nav_dict: #发现恒生行业有的有2个相同的行业
                                     third_nav_dict[li_text+'2'] = {'href':li_href}
                                 else:
                                     third_nav_dict[li_text] = {'href': li_href}
-                        # print("len:",count_of_li)
-                        # print(len(third_nav_dict)," third-nav-dict:",third_nav_dict)
                         second_nav_dict["third-nav"] = third_nav_dict
                     else:
                         second_nav_dict['third-nav'] = "NO-third-nav"
@@ -223,7 +215,7 @@ class IndexCrawller(CateCrawller):
     async def requestDetailByAiohttp(self):
         print("requestDetailByAiohttp running(use async)")
         try:
-            content = await self.crapyUrlByAiohttp(self._url)
+            content = await self.scrapyUrlByAiohttp(self._url)
             content = json.loads(content)  # 将 str 转换为 dict
             items = content['data']['items']
             symbols = {}
@@ -339,9 +331,53 @@ class IndexCrawller(CateCrawller):
                 print(e)
 
 #股票信息爬取类:包括股票代码，当前价，涨跌幅，成交量，换手率
-class StockInfoCrawller(CrawllerBase):
+class StockInfoCrawller(CateCrawller):
     def __init__(self,cateUrl):
         super(StockInfoCrawller, self).__init__(cateUrl)
+
+    async def requestDetailByAioHttp(self,nav_type, nav):
+        print("StockInfoCrawller.requestDetailByAioHttp running")
+        volumn_name_dict = {}  # 建立股票各列英文名称和对应中文名称字典
+        stocks_datails = {}  # 股票详情：股票代码，股票名称，当前价格，等
+        columns = []
+        page = 1
+        try:
+            if nav_type == 1:
+                pass
+            elif nav_type == 2:
+                ajax = secondNavhrefToAjaxhref(self._url, 1, second_nav_kind[nav])
+            elif nav_type == 3:
+                ajax = thirdNavhrefToAjaxhref(self._url, 1)
+            else:
+                raise Exception("nav_type Error")
+            content = await self.scrapyUrlByAiohttp(ajax,cookies=False)
+            data = json.loads(content)['data']  # 将 str 转换为 dict
+            total = data['count']
+            size = 30
+            pages = ceil(total/size) # size 是每页个数，total 是总数，从而获得页数
+            # stocks = data['list']
+            print(content)
+            for page in range(pages):
+                print("current page: ",page+1)
+                if nav_type == 1:
+                    pass
+                elif nav_type == 2:
+                    ajax = secondNavhrefToAjaxhref(self._url, 1, second_nav_kind[nav])
+                elif nav_type == 3:
+                    ajax = thirdNavhrefToAjaxhref(self._url, 1)
+                else:
+                    raise Exception("nav_type Error")
+                content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
+                data = json.loads(content)['data']  # 将 str 转换为 dict
+                stocks = data['list']
+                for stock in stocks:
+                    temp = []
+                    for vol in VOL_NAME.keys():
+                        temp.append(stock[vol])
+                    print("tmp:", temp)
+        except Exception as e:
+            print("some error occured in StockInfoCrawller.requestDetailByAioHttp")
+            print(traceback.print_exc())
 
     def _crawl(self,*args,**kwargs):
         self._driver.get(self._url)
@@ -355,7 +391,9 @@ class StockInfoCrawller(CrawllerBase):
             data_key = column.get_attribute('data-key')
             data_text = column.text
             volumn_name_dict[data_key] = data_text
+        print("vol_name_dict:")
         print(volumn_name_dict)
+        save_to_json(volumn_name_dict, 'volNameDict.json', 'w')
         pageList_webElement = self._wait.until(lambda d: d.find_element(By.CSS_SELECTOR, "#pageList"))
         while True:
             try:
@@ -376,7 +414,7 @@ class StockInfoCrawller(CrawllerBase):
                 print(stocks_datails)
                 break
             except Exception as e:
-                print("some errors occured!")
+                print("some errors occured in StockInfoCrawller._crawl!")
                 print(e)
 
 

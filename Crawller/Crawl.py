@@ -2,9 +2,11 @@
 爬虫运行主进程
 '''
 import asyncio
-from Crawller.CrawllerApi import XQIndexUrl,XQIndustryUrl,XQStockUrl,XQNewIndexUrl
+from Crawller.CrawllerApi import XQIndexUrl, XQIndustryUrl, XQStockUrl, XQNewIndexUrl
 from Crawller.CrawllerAbs import CrawllerBase
-from Crawller.CrawllerImp import CateCrawller,NavCrawller,IndexCrawller,StockInfoCrawller
+from Crawller.ConstInfo import second_nav_kind
+from Utils.NavhrefToAjaxhref import secondNavhrefToAjaxhref, thirdNavhrefToAjaxhref
+from Crawller.CrawllerImp import CateCrawller, NavCrawller, IndexCrawller, StockInfoCrawller
 import time
 import requests_html
 
@@ -53,31 +55,75 @@ async def test():
 
 industry = XQIndustryUrl()
 n = NavCrawller(industry)
+# t1 = time.time()
+# n.crawl()
+# print("crawl use time ",time.time()-t1)
+
+# if __name__ == '__main__':
+#     t = time.time()
+#     loop = asyncio.get_event_loop()
+#     loop.run_until_complete(n.requestDetailByAioHttp())
+#     print("requestDetailByAioHttp use time ",time.time()-t)
+industry = n.crawl()
+t1 = time.time()
+for first in industry:
+    if first in ["最近访问", "香港股市", "美国股市", "债券及回购", "基金", "私募"]:
+        print(f'{first} pass...')
+        continue
+    for second in industry[first]:
+        if second in ["内部交易", "私募中心", "美股一览", "明星股", "新上市公司", "新股上市", "龙虎榜", 'AH股溢价']:
+            continue
+        if industry[first][second]["href"] != "No-href":
+            print(second, "href:", industry[first][second]["href"])
+            stocks = XQStockUrl(industry[first][second]["href"])
+            s = StockInfoCrawller(stocks)
+            s.crawl()
+        elif industry[first][second]["third-nav"] != "NO-third-nav":
+            print(second,"third-nav:",industry[first][second]["third-nav"])
+            for i in industry[first][second]["third-nav"]:
+                print(i,"href:",industry[first][second]["third-nav"][i]["href"])
+                stocks = XQStockUrl(industry[first][second]["third-nav"][i]["href"])
+                s = StockInfoCrawller(stocks)
+                s.crawl()
+t2 = time.time()-t1
+
+async def testindus():
+    for first in industry:
+        if first in ["最近访问", "香港股市", "美国股市", "债券及回购", "基金", "私募"]:
+            print(f'{first} pass...')
+            continue
+        for second in industry[first]:
+            if second in ["内部交易", "私募中心", "美股一览", "明星股", "新上市公司", "新股上市", "龙虎榜", 'AH股溢价']:
+                continue
+            if industry[first][second]["href"] != "No-href":
+                print(second, "href:", industry[first][second]["href"])
+                stocks = XQStockUrl(industry[first][second]["href"])
+                s = StockInfoCrawller(stocks)
+                await s.requestDetailByAioHttp(2, second)
+            if industry[first][second]["third-nav"] != "NO-third-nav":
+                print(second,"third-nav:",industry[first][second]["third-nav"])
+                for third in industry[first][second]["third-nav"]:
+                    print(third,"href:",industry[first][second]["third-nav"][third]["href"])
+                    stocks = XQStockUrl(industry[first][second]["third-nav"][third]["href"])
+                    s = StockInfoCrawller(stocks)
+                    await s.requestDetailByAioHttp(3,third)
 
 if __name__ == '__main__':
+    t3 = time.time()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(n.requestDetailByAioHttp())
-# industry = n.crawl()
-# for first in industry:
-#     if first in ["最近访问","香港股市","美国股市","债券及回购","基金","私募"]:
-#         print(f'{first} pass...')
-#         continue
-#     for ins in industry[first]:
-#         if industry[first][ins]["href"] != "No-href":
-#             print(ins,"href:",industry[first][ins]["href"])
-#             if ins in ["内部交易","私募中心","美股一览","明星股","新上市公司"]:
-#                 continue
-#             stocks = XQStockUrl(industry[first][ins]["href"])
-#             s = StockInfoCrawller(stocks)
-#             s.crawl()
-#         elif industry[first][ins]["third-nav"] != "NO-third-nav":
-#             print(ins,"third-nav:",industry[first][ins]["third-nav"])
-#             for i in industry[first][ins]["third-nav"]:
-#                 print(i,"href:",industry[first][ins]["third-nav"][i]["href"])
-#                 stocks = XQStockUrl(industry[first][ins]["third-nav"][i]["href"])
-#                 s = StockInfoCrawller(stocks)
-#                 s.crawl()
+    loop.run_until_complete(testindus())
+    t4 = time.time()-t3
+    print("fisrt stock use ",t2)
+    print("second stock use ",t4)
 
-# stock = XQStockUrl()
+
+# stock = XQStockUrl('https://xueqiu.com/hq/#exchange=US&plate=3_1_30&firstName=3&secondName=3_1&level2code=255030')
 # s = StockInfoCrawller(stock)
-# s.crawl()
+#
+# async def test_stock():
+#     task = [asyncio.create_task(s.requestDetailByAioHttp())]
+#     await asyncio.gather(*task)
+#
+# if __name__ == '__main__':
+#     loop = asyncio.get_event_loop()
+#     loop.run_until_complete(test_stock())
