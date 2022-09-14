@@ -13,7 +13,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.wait import WebDriverWait
 from DataSaver.JsonSaver.JsonSaveApi import save_to_json
 from Crawller.ConstInfo import VOL_NAME,second_nav_kind
-from Utils.NavhrefToAjaxhref import secondNavhrefToAjaxhref, thirdNavhrefToAjaxhref
+from Utils.NavhrefToAjaxhref import secondNavhrefToAjaxhref, thirdNavhrefToAjaxhref, orderhrefToAjaxhref
 from Crawller.ConstInfo import headers
 from math import ceil
 import asyncio
@@ -24,7 +24,7 @@ from asyncio import Semaphore
 import json
 
 webdriver_location = r'C:\Users\lijianqiang\Desktop\chromedriver'
-wait_time = 6
+wait_time = 10
 concurrency = 10
 samphore = Semaphore(concurrency)
 
@@ -332,15 +332,18 @@ class IndexCrawller(CateCrawller):
 
 #股票信息爬取类:包括股票代码，当前价，涨跌幅，成交量，换手率
 class StockInfoCrawller(CateCrawller):
+    nav_stock_dict = {}
+
     def __init__(self,cateUrl):
         super(StockInfoCrawller, self).__init__(cateUrl)
 
+    # 第一次改进:使用 aiohttp 异步时间:544.4213817119598(并发开到了6), 较之前使用selenium同步时间:1620.906483411789
     async def requestDetailByAioHttp(self,nav_type, nav):
         print("StockInfoCrawller.requestDetailByAioHttp running")
         volumn_name_dict = {}  # 建立股票各列英文名称和对应中文名称字典
         stocks_datails = {}  # 股票详情：股票代码，股票名称，当前价格，等
         columns = []
-        page = 1
+        size = 30
         try:
             if nav_type == 1:
                 pass
@@ -348,25 +351,31 @@ class StockInfoCrawller(CateCrawller):
                 ajax = secondNavhrefToAjaxhref(self._url, 1, second_nav_kind[nav])
             elif nav_type == 3:
                 ajax = thirdNavhrefToAjaxhref(self._url, 1)
+            elif nav_type == 4:
+                ajax = orderhrefToAjaxhref(self._url, 1)
             else:
                 raise Exception("nav_type Error")
-            content = await self.scrapyUrlByAiohttp(ajax,cookies=False)
+            content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
             data = json.loads(content)['data']  # 将 str 转换为 dict
             total = data['count']
-            size = 30
             pages = ceil(total/size) # size 是每页个数，total 是总数，从而获得页数
             # stocks = data['list']
             print(content)
             for page in range(pages):
-                print("current page: ",page+1)
+                print("current page: ", page+1)
+                # if page>8:
+                #     continue
                 if nav_type == 1:
                     pass
                 elif nav_type == 2:
-                    ajax = secondNavhrefToAjaxhref(self._url, 1, second_nav_kind[nav])
+                    ajax = secondNavhrefToAjaxhref(self._url, page+1, second_nav_kind[nav])
                 elif nav_type == 3:
-                    ajax = thirdNavhrefToAjaxhref(self._url, 1)
+                    ajax = thirdNavhrefToAjaxhref(self._url, page+1)
+                elif nav_type == 4:
+                    ajax = orderhrefToAjaxhref(self._url, page+1)
                 else:
                     raise Exception("nav_type Error")
+                print('ajax:',ajax)
                 content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
                 data = json.loads(content)['data']  # 将 str 转换为 dict
                 stocks = data['list']
@@ -374,12 +383,18 @@ class StockInfoCrawller(CateCrawller):
                     temp = []
                     for vol in VOL_NAME.keys():
                         temp.append(stock[vol])
-                    print("tmp:", temp)
+                    if temp[0] not in StockInfoCrawller.nav_stock_dict:
+                        StockInfoCrawller.nav_stock_dict[temp[0]] = [nav]
+                    else:
+                        StockInfoCrawller.nav_stock_dict[temp[0]].append(nav)
+                    print("tmp:", temp,'nav:',StockInfoCrawller.nav_stock_dict[temp[0]])
+            print(StockInfoCrawller.nav_stock_dict)
+            save_to_json(StockInfoCrawller.nav_stock_dict,'navStockDict.json','w') #将股票打上行业标签
         except Exception as e:
             print("some error occured in StockInfoCrawller.requestDetailByAioHttp")
             print(traceback.print_exc())
 
-    def _crawl(self,*args,**kwargs):
+    def _crawl(self, *args, **kwargs):
         self._driver.get(self._url)
         print("StockInfoCrawller running")
         volumn_name_dict = {} #建立股票各列英文名称和对应中文名称字典

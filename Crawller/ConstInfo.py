@@ -43,10 +43,18 @@ second_nav_kind = {
     '新上市公司': 'listed',
 }
 
-'''
-amount:成交额'
-volumn:成交量
-'''
+ORDER = {
+    '幅':'percent',
+    '涨':'desc',
+    '跌':'asc',
+    '创业板':'cyb',
+    '沪A':'sha',
+    '沪B':'shb',
+    '深A':'sza',
+    '深B':'szb',
+    '成交额':'amount',
+    '成交量':'volume',
+}
 
 headers = {  # httpx、aiohttp 的 client 不设置 user-agent 会发生 403 Forbidden，aiohttp 不设置 cookie 会发生 400 错误
     'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36",

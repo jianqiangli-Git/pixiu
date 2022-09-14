@@ -19,6 +19,8 @@ XQ_INDEX_MINUTE_AJAX = 'https://stock.xueqiu.com/v5/stock/chart/minute.json?symb
 XQ_INDEX_SECOND_AJAX = r'https://stock.xueqiu.com/v5/stock/realtime/quotec.json?symbol=SH000001,SZ399001,SZ399006,SH000688&_= timestamp'
 # 二级行业股票详情[沪深一览...](事实上&market也可以省略，重要的是type)
 XQ_SECOND_NAV_AJAX_BASE = XQ_BASE + r'service/v5/stock/screener/quote/list?page={page}&size=30&order=desc&orderby=percent&order_by=percent&market={market}&type={kind}&_={t}'
+# 排行股票详情
+XQ_ORDER_AJAX_BASE = XQ_BASE + 'service/v5/stock/screener/quote/list?page={page}&size=30&order={order}&order_by={order_by}&exchange={exchange}&market={market}&type={kind}&_={t}'
 # 三级行业股票详情
 XQ_THIRD_NAV_AJAX_BASE = XQ_BASE + r'service/v5/stock/screener/quote/list?page={page}&size=30&order=desc&order_by=percent&exchange={exchange}&market={market}&ind_code={ind_code}&_={t}'
 # 香港新股上市
