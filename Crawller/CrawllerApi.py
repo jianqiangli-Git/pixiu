@@ -55,7 +55,7 @@ class XQIndexUrl():
 
 #雪球 行业下的股票url类
 class XQStockUrl():
-    def __init__(self,url):
+    def __init__(self, url=None):
         self._base_url = url
 
     @property

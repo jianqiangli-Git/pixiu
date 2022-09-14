@@ -36,7 +36,7 @@ class CateCrawller(CrawllerBase):
     # requests_html 只创建一个全局 session 而不是每次请求都创建一个 session
     _requests_html_session = requests_html.AsyncHTMLSession()
 
-    def __init__(self,cateUrl):
+    def __init__(self, cateUrl):
         '''
         :param cateUrl: 传入CrawerllerApi模块的 url类别对象，例如XQIndustry，XQIndex
         '''
@@ -51,7 +51,7 @@ class CateCrawller(CrawllerBase):
     # 使用 requests_html 请求
     @staticmethod
     @asyncTimeConsume
-    async def scrapyUrlByRequestsHtml(url,**kwargs):
+    async def scrapyUrlByRequestsHtml(url, **kwargs):
         '''
         :param url: 请求 url
         :return: <class 'requests_html.HTML'>
@@ -74,7 +74,7 @@ class CateCrawller(CrawllerBase):
 
     # 使用 selenium 请求
     @asyncTimeConsume
-    async def scrapyUrlBySelenium(self,url):
+    async def scrapyUrlBySelenium(self, url):
         try:
             self._driver.get(url)
             # 显式等待，等到类似上证指数的元素出现即返回，否则超时抛出异常，超时时间由 wait_time 控制
@@ -338,7 +338,7 @@ class StockInfoCrawller(CateCrawller):
         super(StockInfoCrawller, self).__init__(cateUrl)
 
     # 第一次改进:使用 aiohttp 异步时间:544.4213817119598(并发开到了6), 较之前使用selenium同步时间:1620.906483411789
-    async def requestDetailByAioHttp(self,nav_type, nav):
+    async def requestDetailByAioHttp(self, nav_type, nav):
         print("StockInfoCrawller.requestDetailByAioHttp running")
         volumn_name_dict = {}  # 建立股票各列英文名称和对应中文名称字典
         stocks_datails = {}  # 股票详情：股票代码，股票名称，当前价格，等
@@ -358,7 +358,7 @@ class StockInfoCrawller(CateCrawller):
             content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
             data = json.loads(content)['data']  # 将 str 转换为 dict
             total = data['count']
-            pages = ceil(total/size) # size 是每页个数，total 是总数，从而获得页数
+            pages = ceil(total/size)     # size 是每页个数，total 是总数，从而获得页数
             # stocks = data['list']
             print(content)
             for page in range(pages):
@@ -375,7 +375,7 @@ class StockInfoCrawller(CateCrawller):
                     ajax = orderhrefToAjaxhref(self._url, page+1)
                 else:
                     raise Exception("nav_type Error")
-                print('ajax:',ajax)
+                print('ajax:', ajax)
                 content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
                 data = json.loads(content)['data']  # 将 str 转换为 dict
                 stocks = data['list']
@@ -383,22 +383,26 @@ class StockInfoCrawller(CateCrawller):
                     temp = []
                     for vol in VOL_NAME.keys():
                         temp.append(stock[vol])
+                    if nav_type == 4:    # 排行的类别不加到股票 tag 中
+                        continue
                     if temp[0] not in StockInfoCrawller.nav_stock_dict:
                         StockInfoCrawller.nav_stock_dict[temp[0]] = [nav]
                     else:
                         StockInfoCrawller.nav_stock_dict[temp[0]].append(nav)
-                    print("tmp:", temp,'nav:',StockInfoCrawller.nav_stock_dict[temp[0]])
+                    print("tmp:", temp, 'nav:', StockInfoCrawller.nav_stock_dict[temp[0]])
             print(StockInfoCrawller.nav_stock_dict)
             save_to_json(StockInfoCrawller.nav_stock_dict,'navStockDict.json','w') #将股票打上行业标签
         except Exception as e:
             print("some error occured in StockInfoCrawller.requestDetailByAioHttp")
             print(traceback.print_exc())
 
-    def _crawl(self, *args, **kwargs):
-        self._driver.get(self._url)
-        print("StockInfoCrawller running")
-        volumn_name_dict = {} #建立股票各列英文名称和对应中文名称字典
-        stocks_datails = {} #股票详情：股票代码，股票名称，当前价格，等
+    # 获取股票各列英文名称和对应中文名称字典，在ConstInfo中有备份，如果页面结构有更新比如新增了列，可以执行此方法重新获取
+    def getVolNameDict(self):
+        print("StockInfoCrawller.getVolNameDict running")
+        url = r'https://xueqiu.com/hq/#exchange=CN&firstName=1&secondName=1_0'
+        self._driver.get(url)
+        volumn_name_dict = {}  # 建立股票各列英文名称和对应中文名称字典
+        stocks_datails = {}  # 股票详情：股票代码，股票名称，当前价格，等
         columns = []
         stockList_webElement = self._wait.until(lambda d: d.find_element(By.CSS_SELECTOR, "#stockList"))
         columns_webElement = stockList_webElement.find_elements(By.CSS_SELECTOR, "thead>tr>th")
@@ -409,6 +413,22 @@ class StockInfoCrawller(CateCrawller):
         print("vol_name_dict:")
         print(volumn_name_dict)
         save_to_json(volumn_name_dict, 'volNameDict.json', 'w')
+
+    def _crawl(self, *args, **kwargs):
+        self._driver.get(self._url)
+        print("StockInfoCrawller running")
+        # volumn_name_dict = {} #建立股票各列英文名称和对应中文名称字典
+        stocks_datails = {} #股票详情：股票代码，股票名称，当前价格，等
+        columns = []
+        stockList_webElement = self._wait.until(lambda d: d.find_element(By.CSS_SELECTOR, "#stockList"))
+        # columns_webElement = stockList_webElement.find_elements(By.CSS_SELECTOR, "thead>tr>th")
+        # for column in columns_webElement:
+        #     data_key = column.get_attribute('data-key')
+        #     data_text = column.text
+        #     volumn_name_dict[data_key] = data_text
+        # print("vol_name_dict:")
+        # print(volumn_name_dict)
+        # save_to_json(volumn_name_dict, 'volNameDict1.json', 'w')
         pageList_webElement = self._wait.until(lambda d: d.find_element(By.CSS_SELECTOR, "#pageList"))
         while True:
             try:
