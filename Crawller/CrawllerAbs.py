@@ -3,7 +3,7 @@
 '''
 import time
 import six
-from abc import ABCMeta,abstractmethod
+from abc import ABCMeta, abstractmethod
 
 class CrawllerBase(six.with_metaclass(ABCMeta)):
     def __init__(self, cateUrl):
@@ -17,7 +17,7 @@ class CrawllerBase(six.with_metaclass(ABCMeta)):
         pass
 
     #category 指明爬的内容，比如行业，大盘指数
-    def crawl(self,*args,**kwargs):
+    def crawl(self, *args, **kwargs):
         result = self._crawl(*args,**kwargs)
         # content = crawller(*args,**kwargs)
         print("Crawller received!")
