@@ -23,7 +23,7 @@ def secondNavhrefToAjaxhref(href, page, kind):
         else:
             raise Exception("Url Invalid Error")
     except Exception as e:
-        print('some error occurred in navhrefToAjaxhref')
+        print('some error occurred in secondNavhrefToAjaxhref')
         print(e)
 
 # https://xueqiu.com/service/v5/stock/screener/quote/list?page=1&size=30&order=desc&order_by=percent&exchange=US&market=US&ind_code=255030&_=1662779914175
@@ -44,7 +44,7 @@ def thirdNavhrefToAjaxhref(href, page):
         else:
             raise Exception("Url Invalid Error")
     except Exception as e:
-        print('some error occurred in navhrefToAjaxhref')
+        print('some error occurred in thirdNavhrefToAjaxhref')
         print(e)
 
 #https://xueqiu.com/service/v5/stock/screener/quote/list?page=1&size=30&order=desc&order_by=volume&exchange=CN&market=CN&type=sza&_=1663059410658
@@ -70,11 +70,9 @@ def orderhrefToAjaxhref(href, page):
         print('some error occurred in orderhrefToAjaxhref')
         print(e)
 
-
-
 # a = 'https://xueqiu.com/hq/#exchange=US&plate=3_1_56&firstName=3&secondName=3_1&level2code=453010'
 # thirdNavhrefToAjaxhref(a,1)
 # b = "https://xueqiu.com/hq/#exchange=HK&firstName=2&secondName=2_0"
 # secondNavhrefToAjaxhref(b,1)
-c = "https://xueqiu.com/hq/#exchange=CN&plate=1_3_11&firstName=1&secondName=1_3&type=sza&order=desc&order_by=volume"
+# c = "https://xueqiu.com/hq/#exchange=CN&plate=1_3_11&firstName=1&secondName=1_3&type=sza&order=desc&order_by=volume"
 # orderhrefToAjaxhref(c,1)
