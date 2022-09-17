@@ -14,7 +14,7 @@ symbol = {
     '.INX': {'code': '.INX', 'exchange': 'INDEXSP', 'name': '标普500指数'},
 }
 
-# 股票列表各列英文名称和对应中文名称字典,也会被股票详情爬取哪些指标数据作为依据
+# 股票列表各列英文名称和对应中文名称字典,也会被股票详情爬取哪些指标数据作为依据,可以从 getVolNameDict 获取
 VOL_NAME = {
   "symbol": "股票代码",
   "name": "股票名称",
@@ -42,19 +42,6 @@ second_nav_kind = {
     '上市预告': 'unlisted',
     '新上市公司': 'listed',
 }
-
-# ORDER = {
-#     '幅':'percent',
-#     '涨':'desc',
-#     '跌':'asc',
-#     '创业板':'cyb',
-#     '沪A':'sha',
-#     '沪B':'shb',
-#     '深A':'sza',
-#     '深B':'szb',
-#     '成交额':'amount',
-#     '成交量':'volume',
-# }
 
 headers = {  # httpx、aiohttp 的 client 不设置 user-agent 会发生 403 Forbidden，aiohttp 不设置 cookie 会发生 400 错误
     'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36",
