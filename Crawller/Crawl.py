@@ -177,7 +177,7 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     loop.run_until_complete(stockCrawllerTask(industry))
     save_to_json(StockInfoCrawller.nav_stock_dict, 'navStockDict.json', mode='w')  # 将股票打上行业标签
-    save_to_csv(StockInfoCrawller.stocksList, 'stocks.csv', mode='a')    #将股票数据存为 csv
+    save_to_csv(StockInfoCrawller.stocksDict.values(), f'stocks{int(time.time())}.csv', mode='a')    #将股票数据存为 csv
     print("run use time ", t1 - t)
     print("stock use time ", time.time()-t1)
     print("total time use ", time.time()-t)

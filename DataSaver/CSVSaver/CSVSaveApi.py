@@ -14,6 +14,7 @@ os.path.exists(data_dir) or os.mkdir(data_dir)
 def save_to_csv(data, filename, mode):
     try:
         labels = [VOL_NAME[label] for label in VOL_NAME.keys()]
+        labels.append("行业标签")
         df1 = pd.DataFrame(data=data, columns=labels)
         df1.to_csv(filename, index=False, mode=mode, encoding='utf_8_sig')
         print(f'{filename} save_to_csv success!')

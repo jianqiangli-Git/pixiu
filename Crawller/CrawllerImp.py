@@ -154,7 +154,7 @@ class NavCrawller(CateCrawller):
 
     # 使用 aiohttp 请求
     async def _requestDetailByAioHttp(self):
-        print('requestDetailByAioHttp running')
+        print('NavCrawller.requestDetailByAioHttp running')
         try:
             print(self._url)
             content = await self.scrapyUrlByAiohttp(self._url,cookies=False)
@@ -242,7 +242,7 @@ class IndexCrawller(CateCrawller):
 
     # aiohttp 实现异步请求指数详情页
     async def _requestDetailByAiohttp(self):
-        print("requestDetailByAiohttp running(use async)")
+        print("IndexCrawller.requestDetailByAiohttp running(use async)")
         try:
             content = await self.scrapyUrlByAiohttp(self._url)
             content = json.loads(content)  # 将 str 转换为 dict
@@ -365,6 +365,7 @@ class IndexCrawller(CateCrawller):
 #股票信息爬取类:包括股票代码，当前价，涨跌幅，成交量，换手率
 class StockInfoCrawller(CateCrawller):
     nav_stock_dict = {}
+    stocksDict = {}
     stocksList = []
 
     def __init__(self, cateUrl):
@@ -375,7 +376,7 @@ class StockInfoCrawller(CateCrawller):
         tasks = []
         try:
             for page in range(pages):
-                print("current page: ", page + 1)
+                # print("current page: ", page + 1)
                 if nav_type == 1:
                     pass
                 elif nav_type == 2:
@@ -386,7 +387,7 @@ class StockInfoCrawller(CateCrawller):
                     ajax = orderhrefToAjaxhref(self._url, page + 1)
                 else:
                     raise Exception("nav_type Error")
-                print('ajax:', ajax)
+                # print('ajax:', ajax)
                 tasks.append(asyncio.ensure_future(self.scrapyUrlByAiohttp(ajax, cookies=False)))
             contents = await asyncio.gather(*tasks)
             return contents
@@ -397,9 +398,9 @@ class StockInfoCrawller(CateCrawller):
     # 第一次改进:使用 aiohttp 异步时间:544.4213817119598(并发开到了6), 较之前使用selenium同步时间:1620.906483411789
     async def requestDetailByAioHttp(self, nav_type, nav):
         print("StockInfoCrawller.requestDetailByAioHttp running")
-        volumn_name_dict = {}  # 建立股票各列英文名称和对应中文名称字典
-        stocks_datails = {}  # 股票详情：股票代码，股票名称，当前价格，等
-        columns = []
+        # volumn_name_dict = {}  # 建立股票各列英文名称和对应中文名称字典
+        # stocks_datails = {}  # 股票详情：股票代码，股票名称，当前价格，等
+        # columns = []
         size = 30
         try:
             if nav_type == 1:
@@ -415,6 +416,7 @@ class StockInfoCrawller(CateCrawller):
             content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
             data = json.loads(content)['data']  # 将 str 转换为 dict
             total = data['count']
+            print(f"{nav} total:", total)
             pages = ceil(total/size)     # size 是每页个数，total 是总数，从而获得页数
             # print(content)
             # for page in range(pages):
@@ -437,15 +439,21 @@ class StockInfoCrawller(CateCrawller):
                 stocks = data['list']
                 for stock in stocks:
                     temp = [stock[vol] for vol in VOL_NAME.keys()]
-                    StockInfoCrawller.stocksList.append(temp)       # 将股票信息加到类变量
+                    # StockInfoCrawller.stocksList.append(temp)       # 将股票信息加到类变量
                     # print("tmp:", temp, end=' ')
                     if nav_type == 4:    # 排行的类别不加到股票 tag 中
                         # print()
                         continue
                     if temp[0] not in StockInfoCrawller.nav_stock_dict:
                         StockInfoCrawller.nav_stock_dict[temp[0]] = [nav]
+                        temp.append([nav])
+                        # StockInfoCrawller.stocksList.append(temp)
+                        StockInfoCrawller.stocksDict[temp[0]] = temp
                     else:
                         StockInfoCrawller.nav_stock_dict[temp[0]].append(nav)
+                        # temp.append(nav)
+                        StockInfoCrawller.stocksDict[temp[0]][-1].append(nav)
+                    # StockInfoCrawller.stocksList.append(temp)
                     # print('nav:', StockInfoCrawller.nav_stock_dict[temp[0]])
             # print(StockInfoCrawller.nav_stock_dict)
         except Exception as e:
