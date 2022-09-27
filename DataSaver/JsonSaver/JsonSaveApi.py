@@ -3,6 +3,7 @@
 '''
 import os
 import json
+import traceback
 
 # 获取当前工作目录，如果此时在 Crawller 目录下运行，则获取的是 Crawller 目录路径，而不是 DataSaver
 current_dir = os.getcwd()
@@ -25,7 +26,7 @@ def save_to_json(data, filename, mode):
         data_file = os.path.join(data_dir, filename)
         with open(data_file, mode=mode, encoding='utf8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)  # ensure_ascii=False 保证存为 utf-8 从而中文不会乱码
-        print(f"{filename} save_to_json success!")
+        print(f"{filename} save_to_json success!, type-{type(data)}")
     except Exception as e:
-        print("some error occured in JsonSaveApi.save_to_json")
-        print(e)
+        print(f"some error occured in JsonSaveApi.save_to_json when save {filename}, type-{type(data)}")
+        print(traceback.format_exc())
