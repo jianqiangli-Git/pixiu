@@ -21,13 +21,14 @@ import asyncio
 import aiohttp
 import traceback
 import requests_html
-from asyncio import Semaphore
+
+
 import json
 
 webdriver_location = r'C:\Users\lijianqiang\Desktop\chromedriver'
 wait_time = 10
 concurrency = 20
-samphore = Semaphore(concurrency)
+# samphore = Semaphore(concurrency)
 
 # 不同类别爬虫的基类
 # 只有抽象基类，想要统一只是用抽象基类的 crawl 方法，那么就需要定义基类，让不同类别的爬虫类继承此基类，否则，抽象基类就要
@@ -87,8 +88,8 @@ class CateCrawller(CrawllerBase):
 
     # 使用 aiohttp 请求
     @staticmethod
-    async def scrapyUrlByAiohttp(url,cookies=True):
-        async with samphore:
+    async def scrapyUrlByAiohttp(sem, url, cookies=True):
+        async with sem:
             # 此处频繁创建 session 请求主页又关闭，比较浪费资源，后续可优化为创建一个 session
             async with aiohttp.ClientSession(headers=headers) as session:
                 if cookies:
@@ -153,11 +154,11 @@ class NavCrawller(CateCrawller):
             print(e)
 
     # 使用 aiohttp 请求
-    async def _requestDetailByAioHttp(self):
+    async def _requestDetailByAioHttp(self, sem):
         print('NavCrawller.requestDetailByAioHttp running')
         try:
             print(self._url)
-            content = await self.scrapyUrlByAiohttp(self._url,cookies=False)
+            content = await self.scrapyUrlByAiohttp(sem, self._url, cookies=False)
             nav = self._parse(content)  #后续可以新开一个线程来处理解析，加快速度
             return nav
         except Exception as e:
@@ -216,8 +217,12 @@ class NavCrawller(CateCrawller):
 
     async def _crawl(self, *args, **kwargs):
         try:
+            if 'sem' not in kwargs:
+                raise Exception('use async sem is acquired!')
+            else:
+                sem = kwargs['sem']
             if 'useAsyncByAiohttp' in kwargs and kwargs['useAsyncByAiohttp']:
-                nav = await self._requestDetailByAioHttp()
+                nav = await self._requestDetailByAioHttp(sem)
                 return nav
             else:
                 nav = self._requestDetailBySelenium()
@@ -241,10 +246,10 @@ class IndexCrawller(CateCrawller):
         super(IndexCrawller, self).__init__(cateUrl)
 
     # aiohttp 实现异步请求指数详情页
-    async def _requestDetailByAiohttp(self):
+    async def _requestDetailByAiohttp(self, sem):
         print("IndexCrawller.requestDetailByAiohttp running(use async)")
         try:
-            content = await self.scrapyUrlByAiohttp(self._url)
+            content = await self.scrapyUrlByAiohttp(sem, self._url)
             content = json.loads(content)  # 将 str 转换为 dict
             items = content['data']['items']
             symbols = {}
@@ -263,7 +268,7 @@ class IndexCrawller(CateCrawller):
             save_to_json(status_dict, "statusDict.json", 'w')    # 将股市交易状态和代码的字典关系存为 json 文件
         except Exception as e:
             print("some error occured in IndexCrawller.requestDetailByAiohttp")
-            print(traceback.print_exc())
+            print(traceback.format_exc())
 
     # html-requests 的异步请求
     @asyncTimeConsume
@@ -330,6 +335,10 @@ class IndexCrawller(CateCrawller):
         #             print("Body:", html)
 
     async def _crawl(self, *args, **kwargs):
+        if 'sem' not in kwargs:
+            raise Exception('use async sem is acquired!')
+        else:
+            sem = kwargs['sem']
         # 实验发现 useAsyncBySelenium 更快，三者时间分别为(1.29 vs 3.41 vs 5.94),事实证明：driver 第一次请求是最耗时间的，后面再用driver请求时间急剧减少
         if 'useAsyncBySelenium' in kwargs and kwargs['useAsyncBySelenium']:
             # loop = asyncio.get_event_loop()
@@ -342,7 +351,7 @@ class IndexCrawller(CateCrawller):
         elif 'useAsyncByAiohttp' in kwargs and kwargs['useAsyncByAiohttp']:
             # loop = asyncio.get_event_loop()
             # loop.run_until_complete(self._requestDetailByAiohttp())
-            await self._requestDetailByAiohttp()
+            await self._requestDetailByAiohttp(sem)
         else:
             try:
                 print("IndexCrawller._crawl running(use sync)")
@@ -364,43 +373,43 @@ class IndexCrawller(CateCrawller):
 
 #股票信息爬取类:包括股票代码，当前价，涨跌幅，成交量，换手率
 class StockInfoCrawller(CateCrawller):
-    nav_stock_dict = {}
-    stocksDict = {}
-    stocksList = []
+    # nav_stock_dict = {}
+    # stocksDict = {}
+    # nav_stock_dict = Manager().dict()  #{stock:nav} 的字典
+    # stocksDict = Manager().dict()      #{stock:[stock详情,[nav1,nav2]]} 的字典
+    # stocksList = []      # [stock详情] 的列表
 
     def __init__(self, cateUrl):
         super(StockInfoCrawller, self).__init__(cateUrl)
 
     # 第二次改进:异步爬取每一页,程序总耗时:565,较第一次同步爬取每一页总耗时:758
-    async def scrawlPage(self, pages, nav_type, nav):
-        tasks = []
-        try:
-            for page in range(pages):
-                # print("current page: ", page + 1)
-                if nav_type == 1:
-                    pass
-                elif nav_type == 2:
-                    ajax = secondNavhrefToAjaxhref(self._url, page + 1, second_nav_kind[nav])
-                elif nav_type == 3:
-                    ajax = thirdNavhrefToAjaxhref(self._url, page + 1)
-                elif nav_type == 4:
-                    ajax = orderhrefToAjaxhref(self._url, page + 1)
-                else:
-                    raise Exception("nav_type Error")
-                # print('ajax:', ajax)
-                tasks.append(asyncio.ensure_future(self.scrapyUrlByAiohttp(ajax, cookies=False)))
-            contents = await asyncio.gather(*tasks)
-            return contents
-        except Exception as e:
-            print('some error occurred in StockInfoCrawller.scrawlPage')
-            print(e)
+    # async def scrawlPage(self, pages, nav_type, nav, ajax, sem):
+    #     tasks = []
+    #     try:
+    #         for page in range(pages):
+    #             # print("current page: ", page + 1)
+    #             # if nav_type == 1:
+    #             #     pass
+    #             # elif nav_type == 2:
+    #             #     ajax = secondNavhrefToAjaxhref(self._url, page + 1, second_nav_kind[nav])
+    #             # elif nav_type == 3:
+    #             #     ajax = thirdNavhrefToAjaxhref(self._url, page + 1)
+    #             # elif nav_type == 4:
+    #             #     ajax = orderhrefToAjaxhref(self._url, page + 1)
+    #             # else:
+    #             #     raise Exception("nav_type Error")
+    #             ajax = ajax.replace('page=1', f'page={page+1}')
+    #             # print('ajax:', ajax)
+    #             tasks.append(asyncio.ensure_future(self.scrapyUrlByAiohttp(sem, ajax, cookies=False)))
+    #         contents = await asyncio.gather(*tasks)
+    #         return contents
+    #     except Exception as e:
+    #         print('some error occurred in StockInfoCrawller.scrawlPage')
+    #         print(traceback.format_exc())
 
-    # 第一次改进:使用 aiohttp 异步时间:544.4213817119598(并发开到了6), 较之前使用selenium同步时间:1620.906483411789
-    async def requestDetailByAioHttp(self, nav_type, nav):
-        print("StockInfoCrawller.requestDetailByAioHttp running")
-        # volumn_name_dict = {}  # 建立股票各列英文名称和对应中文名称字典
-        # stocks_datails = {}  # 股票详情：股票代码，股票名称，当前价格，等
-        # columns = []
+    # 把每页数据包装成一个协程，返回其 content 列表
+    async def getPages(self,nav_type,sem,nav):
+        tasks = []
         size = 30
         try:
             if nav_type == 1:
@@ -413,27 +422,26 @@ class StockInfoCrawller(CateCrawller):
                 ajax = orderhrefToAjaxhref(self._url, 1)
             else:
                 raise Exception("nav_type Error")
-            content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
+            content = await self.scrapyUrlByAiohttp(sem, ajax, cookies=False)
             data = json.loads(content)['data']  # 将 str 转换为 dict
             total = data['count']
             print(f"{nav} total:", total)
-            pages = ceil(total/size)     # size 是每页个数，total 是总数，从而获得页数
-            # print(content)
-            # for page in range(pages):
-            #     print("current page: ", page+1)
-            #     if nav_type == 1:
-            #         pass
-            #     elif nav_type == 2:
-            #         ajax = secondNavhrefToAjaxhref(self._url, page+1, second_nav_kind[nav])
-            #     elif nav_type == 3:
-            #         ajax = thirdNavhrefToAjaxhref(self._url, page+1)
-            #     elif nav_type == 4:
-            #         ajax = orderhrefToAjaxhref(self._url, page+1)
-            #     else:
-            #         raise Exception("nav_type Error")
-            #     print('ajax:', ajax)
-            #     content = await self.scrapyUrlByAiohttp(ajax, cookies=False)
-            contents = await self.scrawlPage(pages, nav_type, nav)
+            pages = ceil(total / size)  # size 是每页个数，total 是总数，从而获得页数
+            for page in range(pages):
+                new_page_ajax = ajax.replace('page=1', f'page={page + 1}')
+                # print('getPages.ajax:', newajax)
+                tasks.append(asyncio.ensure_future(self.scrapyUrlByAiohttp(sem, new_page_ajax, cookies=False)))
+            contents = await asyncio.gather(*tasks)
+            return contents
+        except Exception as e:
+            print('some error occurred in getPages')
+            print(traceback.format_exc())
+
+    # 第一次改进:使用 aiohttp 异步时间:544.4213817119598(并发开到了6), 较之前使用selenium同步时间:1620.906483411789
+    async def requestDetailByAioHttp(self, nav_type, nav, sem, LOCK, nav_stock_dict, stocksDict):
+        print("StockInfoCrawller.requestDetailByAioHttp running")
+        try:
+            contents = await self.getPages(nav_type,sem,nav)
             for content in contents:
                 data = json.loads(content)['data']  # 将 str 转换为 dict
                 stocks = data['list']
@@ -444,21 +452,21 @@ class StockInfoCrawller(CateCrawller):
                     if nav_type == 4:    # 排行的类别不加到股票 tag 中
                         # print()
                         continue
-                    if temp[0] not in StockInfoCrawller.nav_stock_dict:
-                        StockInfoCrawller.nav_stock_dict[temp[0]] = [nav]
-                        temp.append([nav])
-                        # StockInfoCrawller.stocksList.append(temp)
-                        StockInfoCrawller.stocksDict[temp[0]] = temp
-                    else:
-                        StockInfoCrawller.nav_stock_dict[temp[0]].append(nav)
-                        # temp.append(nav)
-                        StockInfoCrawller.stocksDict[temp[0]][-1].append(nav)
-                    # StockInfoCrawller.stocksList.append(temp)
-                    # print('nav:', StockInfoCrawller.nav_stock_dict[temp[0]])
-            # print(StockInfoCrawller.nav_stock_dict)
+                    with LOCK:
+                        if temp[0] not in nav_stock_dict:
+                            nav_stock_dict[temp[0]] = [nav]
+                            temp.append([nav])
+                            stocksDict[temp[0]] = temp
+                        else:
+                            tmpNav = nav_stock_dict[temp[0]] #Manager.dict() 值修改问题，具体可见:https://blog.csdn.net/qq_26826585/article/details/127073265?spm=1001.2014.3001.5501
+                            tmpNav.append(nav)
+                            nav_stock_dict[temp[0]] = tmpNav
+                            stockInfo = stocksDict[temp[0]]  # 获取股票详情的列表
+                            stockInfo[-1].append(nav)        #更新股票详情列表最后一个元素的行业信息
+                            stocksDict[temp[0]] = stockInfo
         except Exception as e:
             print("some error occured in StockInfoCrawller.requestDetailByAioHttp")
-            print(traceback.print_exc())
+            print(traceback.format_exc())
 
     # 获取股票各列英文名称和对应中文名称字典，在ConstInfo中有备份，如果页面结构有更新比如新增了列，可以执行此方法重新获取
     def getVolNameDict(self):
@@ -485,14 +493,6 @@ class StockInfoCrawller(CateCrawller):
         stocks_datails = {} #股票详情：股票代码，股票名称，当前价格，等
         columns = []
         stockList_webElement = self._wait.until(lambda d: d.find_element(By.CSS_SELECTOR, "#stockList"))
-        # columns_webElement = stockList_webElement.find_elements(By.CSS_SELECTOR, "thead>tr>th")
-        # for column in columns_webElement:
-        #     data_key = column.get_attribute('data-key')
-        #     data_text = column.text
-        #     volumn_name_dict[data_key] = data_text
-        # print("vol_name_dict:")
-        # print(volumn_name_dict)
-        # save_to_json(volumn_name_dict, 'volNameDict1.json', 'w')
         pageList_webElement = self._wait.until(lambda d: d.find_element(By.CSS_SELECTOR, "#pageList"))
         while True:
             try:
